@@ -4,7 +4,8 @@
 
 ;; Author: Anders Lindgren
 ;; Created: 2000-??-??
-;; Version: 0.0.0
+;; Version: 0.0.1
+;; URL: https://github.com/Lindydancer/multicolumn
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -30,9 +31,13 @@
 ;; provides the "missing features" of Emacs to create a side-by-side
 ;; layout, to navigate efficiently, and to manage the windows.
 ;;
-;; This package is especially useful in conjunction with Follow mode, a
-;; package provided with Emacs that create the illusion that several
+;; This package is especially useful in conjunction with Follow mode,
+;; a package provided with Emacs that create the illusion that several
 ;; windows showing the same buffer form a very tall virtual window.
+;; For example, I use six side-by-side windows spread out across two
+;; monitors, which lets me see 888 consecutive lines of code.
+;; Concretely, this allows me to see all of the code in this package
+;; at once.
 
 ;; Example:
 ;;
@@ -47,6 +52,12 @@
 ;;
 ;; ![Image of Emacs with four side-by-side windows](doc/demo2.png)
 
+;; Emacs versions:
+;;
+;; This package requires at least version 22 of Emacs. However, to run
+;; correctly on version older than Emacs 24, the companion package
+;; https://github.com/Lindydancer/andersl-old-emacs-support is needed.
+
 ;; Usage:
 ;;
 ;; Place the source file in a directory in the load path. Add the
@@ -54,7 +65,7 @@
 ;;
 ;;    (require 'multicolumn)
 
-;; Creating window layout:
+;; Creating side-by-side windows:
 ;;
 ;; * `C-x 4 3' (`multicolumn-delete-other-windows-and-split') creates
 ;; a number of side-by-side windows. The number of windows it creates
@@ -68,6 +79,17 @@
 ;;
 ;; * `C-x 4 u' (`multicolumn-pop-window-configuration') restored the
 ;; previous windows layout.
+
+;; Resizing the frame:
+;;
+;; * `multicolumn-resize-frame' resized and repositions the frame
+;; to accommodate side-by-side windows of a specific width. You can
+;; use this as an alternative to using a full-screen mode.
+;;
+;; * `multicolumn-resize-and-split-frame' resizes and positions
+;; the frame and creates a number of side-by-side windows. This
+;; function can be called from to suitable init file to ensure that a
+;; number of side-by-side windows are created when Emacs is started.
 
 ;; Navigation:
 ;;
@@ -101,7 +123,41 @@
 ;; window using `multicolumn-trackpad-select-first-window' and
 ;; `multicolumn-trackpad-select-last-window', respectively.
 
-;; OS X Note:
+;; Configuration:
+;;
+;; Unfortunately, it's hard from within Emacs to find out information
+;; about the environment outside Emacs, for example a window manager
+;; may reserve parts of the screen. This package tries to contains
+;; information for as many systems as possible, however, you may need
+;; configure this package to match yor system.
+;;
+;; See variable is the source code for how to configure this package.
+
+;; Windows Notes:
+;;
+;; Width of multiple monitor display:
+;;
+;; The functions `display-pixel-width' and `display-pixel-height'
+;; functions only return the dimentions of the primary monitor, in
+;; some Emacs versions. To make this package use the full display, you
+;; can do something like:
+;;
+;;     (defun my-display-pixel-width ()
+;;       ;; The full width of the display
+;;       3200)
+;;
+;;     (setq multicolumn-display-pixel-width-function
+;;           'my-display-pixel-width)
+
+;; OS X Notes:
+;;
+;; In newer Emacs version, you can set `ns-auto-hide-menu-bar' to t to
+;; utilize more of the display.
+;;
+;; In OS X 10.9, each monitor is a separate space. If you want to
+;; stretch an Emacs frame across multiple monitors, you can change
+;; this in "System Preferences -> Mission Control -> Displays have
+;; separate Spaces".
 ;;
 ;; The latest official release for OS X (as of this writing), 24.3,
 ;; does not support horizontal mouse event. However, it will be
@@ -112,63 +168,359 @@
 (eval-when-compile
   (require 'cl))
 
+
 (defvar multicolumn-min-width 72
-  "*The minimul width of windows, in characters.")
+  "*The minimal width a window will have after a split, in characters.")
+
 
 (defvar multicolumn-windows-configuration-stack '()
   "Stack of window configurations.")
 
+
 (defvar multicolumn-ignore-undefined-wheel-events t
-  "When non-nil, undefined wheel events are bound to `ignore'.
+  "*When non-nil, undefined wheel events are bound to `ignore'.
 
 This is done in the global key map when this package is loaded.
 For this variable to take effect, it must be set prior to this.")
+
+
+(defvar multicolumn-resize-frame-default-width 80
+  "*Default window width in characters for `multicolumn-resize-frame'.")
+
+
+(defvar multicolumn-resize-frame-full-lines-only t
+  "*When non-nil, `multicolumn-resize-frame' use full lines.
+
+When this is nil, the frame will fill up the entire height of the
+display (if supported). However, the last line might be clipped.")
+
+
+(defvar multicolumn-resize-frame-place-title-above-screen t
+  "*When non-nil the window title is placed outside the screen.
+
+Currently, this is only done for OS X, when the menu bar is auto
+hidden. (See `ns-auto-hide-menu-bar'.)")
+
+
+(defvar multicolumn-display-pixel-width-function
+  'display-pixel-width
+  "A function which is called to retrieve the width of the display.")
+
+
+(defvar multicolumn-display-pixel-height-function
+  'display-pixel-height
+  "A function which is called to retrieve the height of the display.")
+
+
+(defvar multicolumn-extra-height-function
+  'multicolumn-extra-height-default-function
+  "A function which is called to find the height of non-text parts a frame.")
+
+
+(defvar multicolumn-frame-top-function
+  'multicolumn-frame-top-default-function
+  "A function which is called to find the offset from the top of the display.")
+
+
+(defvar multicolumn-resize-frame--debug nil)
+
+
+
+;; -------------------------------------------------------------------
+;; Resize and position frame.
+;;
+
+;; It's somehwat of black magic to find out exactly how large an Emacs
+;; frame is allowed to be on a specific system. The functions below
+;; are written to include as much information as possible. However, it
+;; is not unlikely that you would need to override one of the
+;; `...-function' variables and write your own function.
+
+;; Note: `set-frame-size' takes the "text" area, i.e. without the one
+;; set of fringes, scroll bars, and two frame borders. However, on
+;; some systems the tool-bar is included in the text are, in some it's
+;; not.
+;;
+;; Same as `frame-pixel-width':
+;;
+;; (let ((res 0))
+;;   (dolist (w (window-list))
+;;     (setq res (+ (window-width w t)
+;;                  (frame-scroll-bar-width)
+;;                  (frame-fringe-width)
+;;                  res)))
+;;   (+ res (* 2 (frame-border-width))))
+
+;; The following facts appears to be impossible to find out:
+;;
+;; * The display area available to use (e.g. if the system has a menu).
+;;
+;; * The height of the menu bar, in pixels.
+;;
+;; * The height of the tool bar, in pixels.
+;;
+;; * If the tool bar is included in the text height of a frame.
+
+(defconst multicolumn-ns-title-height 24)
+(defconst multicolumn-ns-menu-height 22)
+
+(defconst multicolumn-w32-title-height 24)
+(defconst multicolumn-w32-menu-height 24)
+
+(defun multicolumn-extra-height-default-function ()
+  "Number of vertical pixels wasted in frame for the current window system."
+  (+
+   ;; Window title.
+   (cond ((eq window-system 'w32)
+          multicolumn-w32-title-height)
+         ((memq window-system '(mac ns))
+          multicolumn-ns-title-height)
+         ((eq window-system 'x)
+          ;; Window title and menu bar.
+          ;;
+          ;; Note: This is just an estimate, your milage may wary.
+          22)
+         (t
+          0))
+   ;; Menu bar.
+   (cond ((not menu-bar-mode)
+          0)
+         ((eq window-system 'w32)
+          multicolumn-w32-title-height)
+         ((memq window-system '(mac ns))
+          ;; For OS X, the menu bar is not part of the frame.
+          0)
+         ((eq window-system 'x)
+          23)
+         (t
+          (* (frame-parameter (selected-frame) 'menu-bar-lines)
+             (frame-char-height))))
+   ;; Tool bar.
+   (cond ((or (not (boundp 'tool-bar-mode))
+              (not tool-bar-mode))
+          0)
+         ((eq window-system 'x)
+          ;; For X11, the tool bar is included in the "text" area.
+          0)
+         (t
+          ;; Note: This might not be true for all window systems.
+          32))))
+
+
+(defun multicolumn-frame-top-default-function ()
+  "The offset from the top of the display the frame could be placed."
+  (cond ((memq window-system '(mac ns))
+         (if (and (boundp 'ns-auto-hide-menu-bar)
+                  ns-auto-hide-menu-bar)
+             (if multicolumn-resize-frame-place-title-above-screen
+                 -24
+               0)
+           22))
+        ((eq window-system 'w32)
+         0)
+        (t
+         ;; Just a number picked out of a hat.
+         22)))
+
+
+(defun multicolumn-window-extra-width ()
+  "The width in pixels of the fringes and scroll bar.
+
+Prior to `window-resize-pixelwise' was introduced (i.e. up to and
+inclduing Emacs 24.3), the fringes and scroll bars were padded to
+a multiple of the width of a frame character."
+  (let ((extra-width (+ (frame-scroll-bar-width)
+                        (frame-fringe-width))))
+    (if (boundp 'window-resize-pixelwise)
+        extra-width
+      ;; Round up to nearest multiple of the frame char width.
+      (+ extra-width
+         (- (frame-char-width)
+            (% extra-width (frame-char-width)))))))
+
+
+(defun multicolumn-window-pixel-width (width)
+  "The width of a window, with WIDTH characters, in pixels."
+  (+ (* width
+        (frame-char-width))
+     (multicolumn-window-extra-width)))
+
+
+(defun multicolumn-resize-frame--optimal-number-of-windows (width-in-chars)
+  "Return number of side-by-side windows the display can accomodate.
+
+WIDTH-IN-CHARS is the width of each window, in characters."
+  (max 1
+       (/ (- (funcall multicolumn-display-pixel-width-function)
+             (* 2 (frame-border-width)))
+          (multicolumn-window-pixel-width width-in-chars))))
+
+(defun multicolumn-resize-frame--read-interactive-arguments ()
+  "Read interactive arguments for `multicolumn-resize-frame' etc."
+  (if current-prefix-arg
+      (let ((width (read-number
+                    "Width: "
+                    multicolumn-resize-frame-default-width)))
+        (list width
+              (read-number
+               "Columns: "
+               (multicolumn-resize-frame--optimal-number-of-windows width))))
+    '(nil nil)))
+
+
+
+;; Frame parameters (as seen in the wild):
+;;
+;;                         w32  ns    x
+;;
+;; internal-border-width    0    2    1
+;; border-width             2    0    0
+;;
+
+(defun multicolumn-resize-frame (&optional
+                                 width-in-chars
+                                 number-of-windows)
+  "Resize and position frame to accommodate multiple side-by-side windows.
+
+With \\[universal-argument], prompt for window width and number
+of windows.
+
+Return intended number of windows, or nil in case there is no
+window system."
+  (interactive (multicolumn-resize-frame--read-interactive-arguments))
+  (if (not window-system)
+      ;; By returning nil, it's possible to chain this function with
+      ;; `multicolumn-delete-other-windows-and-split' even when a
+      ;; window system isn't used.
+      nil
+    (unless width-in-chars
+      (setq width-in-chars multicolumn-resize-frame-default-width))
+    (unless number-of-windows
+      (setq number-of-windows
+            (multicolumn-resize-frame--optimal-number-of-windows
+             width-in-chars)))
+    (let* ((top (funcall multicolumn-frame-top-function))
+           ;; `set-frame-size' expectes the width of the "text area",
+           ;; i.e. without one set of fringes and a scroll bar.
+           (width (- (* number-of-windows
+                        (multicolumn-window-pixel-width width-in-chars))
+                     (multicolumn-window-extra-width)))
+           (height
+            (- (funcall
+                multicolumn-display-pixel-height-function)
+               top)))
+      (setq height
+            (- height
+               (funcall multicolumn-extra-height-function)))
+      (when multicolumn-resize-frame-full-lines-only
+        ;; Ensure only full lines.
+        (setq height (- height (% height (frame-char-height)))))
+      (if (boundp 'window-resize-pixelwise)
+          (set-frame-size (selected-frame)
+                          width
+                          height
+                          'pixelwise)
+        (set-frame-size (selected-frame)
+                        (/ width (frame-char-width))
+                        (/ height (frame-char-height))))
+      (when multicolumn-resize-frame--debug
+        ;; Without this, `frame-text-height' will not return the
+        ;; correct value, for X11.
+        (sit-for 0.1)
+        (message (format "height: %d (became %d)" height
+                         (frame-text-height))))
+
+      ;; Note, `set-frame-position' can't be used as it is documented
+      ;; to handle negative values in a special way. (Even if it
+      ;; actually don't, at least for OS X.)
+      (set-frame-parameter
+       (selected-frame)
+       'left
+       ;; Center horizontally, to ensure that no window will be split
+       ;; between two monitors. (Assuming that an even number of
+       ;; columns and symmetrical monitors are used.)
+       (- (/ (- (funcall
+                 multicolumn-display-pixel-width-function)
+                (+ width
+                   (multicolumn-window-extra-width)
+                   (* 2 (frame-border-width))))
+             2)
+          (or (frame-parameter nil 'border-width)
+              0)))
+      (set-frame-parameter (selected-frame)
+                           'top
+                           (list '+ top))
+      ;; Return value.
+      number-of-windows)))
+
+
+(defun multicolumn-resize-and-split-frame (&optional
+                                           width-in-chars
+                                           number-of-windows)
+  "Resize, position, and split frame with multiple side-by-side windows.
+
+With \\[universal-argument], prompt for window width and number
+of windows."
+  (interactive (multicolumn-resize-frame--read-interactive-arguments))
+  (multicolumn-delete-other-windows-and-split
+   (multicolumn-resize-frame width-in-chars number-of-windows)))
 
 
 ;; -------------------------------------------------------------------
 ;; Create multi column layout.
 ;;
 
-(defun multicolumn-window-width (&optional win)
-  (if (fboundp 'window-text-width)
-      (window-text-width win)
-    (window-width win)))
+(defun multicolumn-split (&optional number-of-windows)
+  "Split selected window horzontally into side-by-side windows.
 
-;; Note: This implementaion calculates the width by comparing the
-;; width of one window with the width of two split windows. There
-;; might be other ways to calculate this using `window-fringe', frame
-;; properties like `scroll-bar-width' etc. However, such an
-;; implementation would be error-prone as it would have to replicate
-;; exacly how Emacs layout the frame pixel-by-pixel, something that
-;; could change over time and might also vary between window systems.
-(defun multicolumn-extra-columns-width ()
-  "Width, in characters, of extra stuff in each window."
-  (save-window-excursion
-    (delete-other-windows)
-    (let ((orig-width (multicolumn-window-width)))
-      (split-window-horizontally)
-      (- orig-width (+ (multicolumn-window-width)
-                       (multicolumn-window-width (next-window)))))))
-
-
-(defun multicolumn-split (&optional arg)
-  "Split selected window horzontally into ARG side-by-side windows.
-
-Should ARG be nil as many windows as possible are created as long
-as they are will not become narrower than
-`multicolumn-min-width'."
+Split into NUMBER-OF-WINDOWS windows. Should it be nil, create as
+many windows as possible as long as they will not become narrower
+than `multicolumn-min-width'."
   (interactive "P")
-  (let ((extra-width (multicolumn-extra-columns-width)))
-    (unless arg
-      (setq arg (/ (+ (multicolumn-window-width) extra-width)
-		   (+ multicolumn-min-width extra-width))))
-    (let ((width (- (multicolumn-window-width) (* (- arg 1) extra-width))))
-      (while (> arg 1)
-	(split-window-horizontally
-	 (+ (/ width arg) extra-width))
-	(setq width (- width (multicolumn-window-width)))
-	(other-window 1)
-	(setq arg (- arg 1))))))
+  (let ((extra-width (multicolumn-window-extra-width))
+        (original-window (selected-window)))
+    (if (boundp 'window-resize-pixelwise)
+        ;; Split pixelwise.
+        (progn
+          (unless number-of-windows
+            (setq number-of-windows
+                  (/ (+ (window-width nil 'pixelwise)
+                        extra-width)
+                     (+ (* multicolumn-min-width
+                           (frame-char-width))
+                        extra-width))))
+          (let ((width (- (window-width nil 'pixelsize)
+                          (* (- number-of-windows 1)
+                             extra-width))))
+            (while (> number-of-windows 1)
+              (let ((window-resize-pixelwise t))
+                (split-window
+                 nil
+                 (+ (/ width number-of-windows) extra-width)
+                 'right
+                 'pixelwise))
+              (setq width (- width (window-width nil 'pixelwise)))
+              (other-window 1)
+              (setq number-of-windows (- number-of-windows 1)))))
+      ;; Split characterwise.
+      ;;
+      ;; Up to Emacs 24.3, splitting windows could only be done
+      ;; characterwise. Also, the sum of the width of the fringes and
+      ;; the scroll bars were a multiple of the frame character width.
+      (setq extra-width (/ extra-width (frame-char-width)))
+      (unless number-of-windows
+        (setq number-of-windows (/ (+ (window-width)
+                                      extra-width)
+                                   (+ multicolumn-min-width
+                                      extra-width))))
+      (let ((width (- (window-width) (* (- number-of-windows 1) extra-width))))
+        (while (> number-of-windows 1)
+          (split-window-horizontally
+           (+ (/ width number-of-windows) extra-width))
+          (setq width (- width (window-width)))
+          (other-window 1)
+          (setq number-of-windows (- number-of-windows 1)))))
+    (select-window original-window)))
 
 
 (defun multicolumn-delete-other-windows-and-split
@@ -188,7 +540,7 @@ The previous window layout can be restored using
 
 
 (defun multicolumn-delete-other-windows-and-split-with-follow-mode
-  (&optional arg)
+    (&optional arg)
   "Fill frame with selected window in ARG windows with `follow-mode' enabled.
 
 Should ARG be nil as many windows as possible are created as long
@@ -509,7 +861,7 @@ horizontal and vertical trackpad events are mixed."
 
 
 (define-minor-mode multicolumn-mode
-  "Glocbal minor mode binds multi column functions to suitable keys."
+  "Global minor mode binds multi column functions to suitable keys."
   :global t
   :init-value t
   :keymap multicolumn-map)
