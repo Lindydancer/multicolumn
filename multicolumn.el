@@ -4,7 +4,7 @@
 
 ;; Author: Anders Lindgren
 ;; Created: 2000-??-??
-;; Version: 0.0.1
+;; Version: 0.0.2
 ;; URL: https://github.com/Lindydancer/multicolumn
 
 ;; This program is free software: you can redistribute it and/or modify
@@ -54,9 +54,10 @@
 
 ;; Emacs versions:
 ;;
-;; This package requires at least version 22 of Emacs. However, to run
-;; correctly on version older than Emacs 24, the companion package
-;; https://github.com/Lindydancer/andersl-old-emacs-support is needed.
+;; This package is designed for Emacs 24.4. However, together with the
+;; package https://github.com/Lindydancer/andersl-old-emacs-support it
+;; works with older Emacs versions. It has been tested on version 22
+;; and 23 but it might work on earlier versions as well.
 
 ;; Usage:
 ;;
@@ -598,7 +599,8 @@ The previous window layout can be restored using
 (defun multicolumn-transpose-windows ()
   "Swap the buffers of the current and the next window."
   (interactive)
-  (multicolumn-swap-windows-content (selected-window) (next-window)))
+  (multicolumn-swap-windows-content (selected-window) (next-window))
+  (select-window (next-window)))
 
 
 (defun multicolumn-swap-windows-content (win1 win2)
