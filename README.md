@@ -1,7 +1,7 @@
 # multicolumn - Support for multiple side-by-side windows
 
 *Author:* Anders Lindgren<br>
-*Version:* 0.0.2<br>
+*Version:* 0.0.3<br>
 *URL:* [https://github.com/Lindydancer/multicolumn](https://github.com/Lindydancer/multicolumn)<br>
 
 Commands helpful when using multiple side-by-side windows.

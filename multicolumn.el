@@ -1,10 +1,10 @@
-;;; multicolumn.el -- Support for multiple side-by-side windows.
+;;; multicolumn.el --- Support for multiple side-by-side windows.
 
 ;; Copyright (C) 2000-2014 Anders Lindgren.
 
 ;; Author: Anders Lindgren
 ;; Created: 2000-??-??
-;; Version: 0.0.2
+;; Version: 0.0.3
 ;; URL: https://github.com/Lindydancer/multicolumn
 
 ;; This program is free software: you can redistribute it and/or modify
@@ -472,12 +472,14 @@ of windows."
 ;;
 
 (defun multicolumn-split (&optional number-of-windows)
-  "Split selected window horzontally into side-by-side windows.
+  "Split selected window horizontally into side-by-side windows.
 
 Split into NUMBER-OF-WINDOWS windows. Should it be nil, create as
 many windows as possible as long as they will not become narrower
 than `multicolumn-min-width'."
   (interactive "P")
+  (if number-of-windows
+      (setq number-of-windows (prefix-numeric-value number-of-windows)))
   (let ((extra-width (multicolumn-window-extra-width))
         (original-window (selected-window)))
     (if (boundp 'window-resize-pixelwise)
@@ -509,6 +511,9 @@ than `multicolumn-min-width'."
       ;; characterwise. Also, the sum of the width of the fringes and
       ;; the scroll bars were a multiple of the frame character width.
       (setq extra-width (/ extra-width (frame-char-width)))
+      ;; After a frame resize, `window-width' doesn't return the
+      ;; correct value without this. (Seen on Emacs 22 under Windows.)
+      (sit-for 0.1)
       (unless number-of-windows
         (setq number-of-windows (/ (+ (window-width)
                                       extra-width)
@@ -525,11 +530,11 @@ than `multicolumn-min-width'."
 
 
 (defun multicolumn-delete-other-windows-and-split
-    (&optional arg)
+    (&optional number-of-windows)
   "Fill frame with buffer of selected window in ARG side-by-side windows.
 
-Should ARG be nil as many windows as possible are created as long
-as they are will not become narrower than
+Should NUMBER-OF-WINDOWS be nil as many windows as possible are
+created as long as they are will not become narrower than
 `multicolumn-min-width'.
 
 The previous window layout can be restored using
@@ -537,21 +542,21 @@ The previous window layout can be restored using
   (interactive "P")
   (push (current-window-configuration) multicolumn-windows-configuration-stack)
   (delete-other-windows)
-  (multicolumn-split arg))
+  (multicolumn-split number-of-windows))
 
 
 (defun multicolumn-delete-other-windows-and-split-with-follow-mode
-    (&optional arg)
+    (&optional number-of-windows)
   "Fill frame with selected window in ARG windows with `follow-mode' enabled.
 
-Should ARG be nil as many windows as possible are created as long
-as they are will not become narrower than
+Should NUMBER-OF-WINDOWS be nil as many windows as possible are
+created as long as they are will not become narrower than
 `multicolumn-min-width'.
 
 The previous window layout can be restored using
 `multicolumn-pop-window-configuration'."
   (interactive "P")
-  (multicolumn-delete-other-windows-and-split arg)
+  (multicolumn-delete-other-windows-and-split number-of-windows)
   (follow-mode 1))
 
 

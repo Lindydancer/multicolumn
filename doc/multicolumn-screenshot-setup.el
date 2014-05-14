@@ -1,4 +1,4 @@
-;; multicolumn-screenshot-setup.el -- prepare Emacs for screenshot.
+;; multicolumn-screenshot-setup.el --- prepare Emacs for screenshot.
 
 (defvar multicolumn-screenshot-setup-file-name
   (or load-file-name
