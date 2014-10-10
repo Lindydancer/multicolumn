@@ -4,8 +4,9 @@
 
 ;; Author: Anders Lindgren
 ;; Created: 2000-??-??
-;; Version: 0.0.3
+;; Version: 0.0.4
 ;; URL: https://github.com/Lindydancer/multicolumn
+;; Package-Requires: ((old-emacs-support "0.0.2"))
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -52,12 +53,13 @@
 ;;
 ;; ![Image of Emacs with four side-by-side windows](doc/demo2.png)
 
-;; Emacs versions:
+;; Supported Emacs Versions:
 ;;
-;; This package is designed for Emacs 24.4. However, together with the
-;; package https://github.com/Lindydancer/andersl-old-emacs-support it
-;; works with older Emacs versions. It has been tested on version 22
-;; and 23 but it might work on earlier versions as well.
+;; This package is primarily for Emacs 24.4. However, with the help of
+;; the companion package [old-emacs-support][1] it can be used with
+;; earlier Emacs versions, at least from Emacs 22.
+;;
+;; [1]: https://github.com/Lindydancer/old-emacs-support
 
 ;; Usage:
 ;;
@@ -168,6 +170,10 @@
 
 (eval-when-compile
   (require 'cl))
+
+
+;; Load backward compatibility package, if present.
+(require 'old-emacs-support nil t)
 
 
 (defvar multicolumn-min-width 72
@@ -378,6 +384,7 @@ WIDTH-IN-CHARS is the width of each window, in characters."
 ;; border-width             2    0    0
 ;;
 
+;;;###autoload
 (defun multicolumn-resize-frame (&optional
                                  width-in-chars
                                  number-of-windows)
@@ -455,6 +462,7 @@ window system."
       number-of-windows)))
 
 
+;;;###autoload
 (defun multicolumn-resize-and-split-frame (&optional
                                            width-in-chars
                                            number-of-windows)
@@ -471,6 +479,7 @@ of windows."
 ;; Create multi column layout.
 ;;
 
+;;;###autoload
 (defun multicolumn-split (&optional number-of-windows)
   "Split selected window horizontally into side-by-side windows.
 
@@ -529,6 +538,7 @@ than `multicolumn-min-width'."
     (select-window original-window)))
 
 
+;;;###autoload
 (defun multicolumn-delete-other-windows-and-split
     (&optional number-of-windows)
   "Fill frame with buffer of selected window in ARG side-by-side windows.
@@ -545,6 +555,7 @@ The previous window layout can be restored using
   (multicolumn-split number-of-windows))
 
 
+;;;###autoload
 (defun multicolumn-delete-other-windows-and-split-with-follow-mode
     (&optional number-of-windows)
   "Fill frame with selected window in ARG windows with `follow-mode' enabled.
@@ -560,6 +571,7 @@ The previous window layout can be restored using
   (follow-mode 1))
 
 
+;;;###autoload
 (defun multicolumn-pop-window-configuration ()
   "Go back to the previous window configuration."
   (interactive)
@@ -573,6 +585,7 @@ The previous window layout can be restored using
 ;; Collect all windows displaying the same buffer
 ;;
 
+;;;###autoload
 (defun multicolumn-collect-windows ()
   "Make sure windows displaying the same buffer are adjacent."
   (interactive)
@@ -601,6 +614,7 @@ The previous window layout can be restored using
                 (multicolumn-swap-windows-content rest window))))))))
 
 
+;;;###autoload
 (defun multicolumn-transpose-windows ()
   "Swap the buffers of the current and the next window."
   (interactive)
@@ -608,6 +622,7 @@ The previous window layout can be restored using
   (select-window (next-window)))
 
 
+;;;###autoload
 (defun multicolumn-swap-windows-content (win1 win2)
   "Swap buffers of WIN1 and WIN2."
   (if (not (eq win1 win2))
@@ -623,12 +638,14 @@ The previous window layout can be restored using
 ;; Navigation and manipulation of windows in a multi column layout.
 ;;
 
+;;;###autoload
 (defun multicolumn-extend-right ()
   "Display the current buffer in the next window to the right."
   (interactive)
   (multicolumn-extend-direction 'next-window))
 
 
+;;;###autoload
 (defun multicolumn-extend-left ()
   "Display the current buffer in the next window to the left."
   (interactive)
@@ -652,18 +669,21 @@ The previous window layout can be restored using
         (set-window-buffer window buffer))))
 
 
+;;;###autoload
 (defun multicolumn-select-first-window ()
   "Select the leftmost window in the frame."
   (interactive)
   (select-window (frame-first-window)))
 
 
+;;;###autoload
 (defun multicolumn-select-last-window ()
   "Select the rightmost window in the frame."
   (interactive)
   (select-window (previous-window (frame-first-window))))
 
 
+;;;###autoload
 (defun multicolumn-select-previous-window ()
   "Select previous window."
   (interactive)
@@ -867,6 +887,7 @@ horizontal and vertical trackpad events are mixed."
                 (global-set-key key 'ignore)))))))))
 
 
+;;;###autoload
 (define-minor-mode multicolumn-mode
   "Global minor mode binds multi column functions to suitable keys."
   :global t

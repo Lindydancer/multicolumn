@@ -1,7 +1,7 @@
 # multicolumn - Support for multiple side-by-side windows
 
 *Author:* Anders Lindgren<br>
-*Version:* 0.0.3<br>
+*Version:* 0.0.4<br>
 *URL:* [https://github.com/Lindydancer/multicolumn](https://github.com/Lindydancer/multicolumn)<br>
 
 Commands helpful when using multiple side-by-side windows.
@@ -34,12 +34,13 @@ is enabled, which makes it possible to see the entire text at once.
 
 ![Image of Emacs with four side-by-side windows](doc/demo2.png)
 
-## Emacs versions
+## Supported Emacs Versions
 
-This package is designed for Emacs 24.4. However, together with the
-package https://github.com/Lindydancer/andersl-old-emacs-support it
-works with older Emacs versions. It has been tested on version 22
-and 23 but it might work on earlier versions as well.
+This package is primarily for Emacs 24.4. However, with the help of
+the companion package [old-emacs-support][1] it can be used with
+earlier Emacs versions, at least from Emacs 22.
+
+[1]: https://github.com/Lindydancer/old-emacs-support
 
 ## Usage
 
