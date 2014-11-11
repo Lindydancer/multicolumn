@@ -1,7 +1,7 @@
-# multicolumn - Support for multiple side-by-side windows
+# multicolumn - Creating and managing multiple side-by-side windows
 
 *Author:* Anders Lindgren<br>
-*Version:* 0.0.4<br>
+*Version:* 0.1.0<br>
 *URL:* [https://github.com/Lindydancer/multicolumn](https://github.com/Lindydancer/multicolumn)<br>
 
 Commands helpful when using multiple side-by-side windows.
@@ -34,20 +34,21 @@ is enabled, which makes it possible to see the entire text at once.
 
 ![Image of Emacs with four side-by-side windows](doc/demo2.png)
 
-## Supported Emacs Versions
-
-This package is primarily for Emacs 24.4. However, with the help of
-the companion package [old-emacs-support][1] it can be used with
-earlier Emacs versions, at least from Emacs 22.
-
-[1]: https://github.com/Lindydancer/old-emacs-support
-
 ## Usage
 
-Place the source file in a directory in the load path. Add the
-following lines to an appropriate init file:
+This package provides a number of functions for creating and
+managing multiple side-by-side windows. It also provides
+Multicolumn global mode that binds a number of keys to the
+functions.
+
+## Installation
+
+Place this package in a directory in the load-path. To activate it,
+use *customize* or place the following lines in a suitable init
+file:
 
        (require 'multicolumn)
+       (multicolumn-global-mode 1)
 
 ## Creating side-by-side windows
 
@@ -64,7 +65,7 @@ previous windows layout.
 
 ## Resizing the frame
 
-* `multicolumn-resize-frame` resized and repositions the frame
+* `multicolumn-resize-frame` resizes and repositions the frame
 to accommodate side-by-side windows of a specific width. You can
 use this as an alternative to using a full-screen mode.
 * `multicolumn-resize-and-split-frame` resizes and positions
@@ -106,16 +107,16 @@ Unfortunately, it's hard from within Emacs to find out information
 about the environment outside Emacs, for example a window manager
 may reserve parts of the screen. This package tries to contains
 information for as many systems as possible, however, you may need
-configure this package to match yor system.
+configure this package to match your system.
 
 See variable is the source code for how to configure this package.
 
-## Windows Notes
+## MS-Windows Notes
 
 ### Width of multiple monitor display
 
 The functions `display-pixel-width` and `display-pixel-height`
-functions only return the dimentions of the primary monitor, in
+functions only return the dimensions of the primary monitor, in
 some Emacs versions. To make this package use the full display, you
 can do something like:
 
@@ -128,6 +129,9 @@ can do something like:
 
 ## OS X Notes
 
+Some features are only available in newer Emacs versions.
+Horizontal mouse events, for example, require Emacs 24.4.
+
 In newer Emacs version, you can set `ns-auto-hide-menu-bar` to t to
 utilize more of the display.
 
@@ -135,10 +139,6 @@ In OS X 10.9, each monitor is a separate space. If you want to
 stretch an Emacs frame across multiple monitors, you can change
 this in "System Preferences -> Mission Control -> Displays have
 separate Spaces".
-
-The latest official release for OS X (as of this writing), 24.3,
-does not support horizontal mouse event. However, it will be
-included in the next release.
 
 
 ---

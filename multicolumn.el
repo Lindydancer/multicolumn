@@ -1,12 +1,11 @@
-;;; multicolumn.el --- Support for multiple side-by-side windows.
+;;; multicolumn.el --- Creating and managing multiple side-by-side windows.
 
 ;; Copyright (C) 2000-2014 Anders Lindgren.
 
 ;; Author: Anders Lindgren
 ;; Created: 2000-??-??
-;; Version: 0.0.4
+;; Version: 0.1.0
 ;; URL: https://github.com/Lindydancer/multicolumn
-;; Package-Requires: ((old-emacs-support "0.0.2"))
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -53,20 +52,21 @@
 ;;
 ;; ![Image of Emacs with four side-by-side windows](doc/demo2.png)
 
-;; Supported Emacs Versions:
-;;
-;; This package is primarily for Emacs 24.4. However, with the help of
-;; the companion package [old-emacs-support][1] it can be used with
-;; earlier Emacs versions, at least from Emacs 22.
-;;
-;; [1]: https://github.com/Lindydancer/old-emacs-support
-
 ;; Usage:
 ;;
-;; Place the source file in a directory in the load path. Add the
-;; following lines to an appropriate init file:
+;; This package provides a number of functions for creating and
+;; managing multiple side-by-side windows. It also provides
+;; Multicolumn global mode that binds a number of keys to the
+;; functions.
+
+;; Installation:
+;;
+;; Place this package in a directory in the load-path. To activate it,
+;; use *customize* or place the following lines in a suitable init
+;; file:
 ;;
 ;;    (require 'multicolumn)
+;;    (multicolumn-global-mode 1)
 
 ;; Creating side-by-side windows:
 ;;
@@ -85,7 +85,7 @@
 
 ;; Resizing the frame:
 ;;
-;; * `multicolumn-resize-frame' resized and repositions the frame
+;; * `multicolumn-resize-frame' resizes and repositions the frame
 ;; to accommodate side-by-side windows of a specific width. You can
 ;; use this as an alternative to using a full-screen mode.
 ;;
@@ -132,16 +132,16 @@
 ;; about the environment outside Emacs, for example a window manager
 ;; may reserve parts of the screen. This package tries to contains
 ;; information for as many systems as possible, however, you may need
-;; configure this package to match yor system.
+;; configure this package to match your system.
 ;;
 ;; See variable is the source code for how to configure this package.
 
-;; Windows Notes:
+;; MS-Windows Notes:
 ;;
 ;; Width of multiple monitor display:
 ;;
 ;; The functions `display-pixel-width' and `display-pixel-height'
-;; functions only return the dimentions of the primary monitor, in
+;; functions only return the dimensions of the primary monitor, in
 ;; some Emacs versions. To make this package use the full display, you
 ;; can do something like:
 ;;
@@ -154,6 +154,9 @@
 
 ;; OS X Notes:
 ;;
+;; Some features are only available in newer Emacs versions.
+;; Horizontal mouse events, for example, require Emacs 24.4.
+;;
 ;; In newer Emacs version, you can set `ns-auto-hide-menu-bar' to t to
 ;; utilize more of the display.
 ;;
@@ -161,19 +164,11 @@
 ;; stretch an Emacs frame across multiple monitors, you can change
 ;; this in "System Preferences -> Mission Control -> Displays have
 ;; separate Spaces".
-;;
-;; The latest official release for OS X (as of this writing), 24.3,
-;; does not support horizontal mouse event. However, it will be
-;; included in the next release.
 
 ;;; Code:
 
 (eval-when-compile
   (require 'cl))
-
-
-;; Load backward compatibility package, if present.
-(require 'old-emacs-support nil t)
 
 
 (defvar multicolumn-min-width 72
@@ -211,33 +206,34 @@ hidden. (See `ns-auto-hide-menu-bar'.)")
 
 (defvar multicolumn-display-pixel-width-function
   'display-pixel-width
-  "A function which is called to retrieve the width of the display.")
+  "A function that is called to retrieve the width of the display.")
 
 
 (defvar multicolumn-display-pixel-height-function
   'display-pixel-height
-  "A function which is called to retrieve the height of the display.")
+  "A function that is called to retrieve the height of the display.")
 
 
 (defvar multicolumn-extra-height-function
   'multicolumn-extra-height-default-function
-  "A function which is called to find the height of non-text parts a frame.")
+  "A function that is called to find the height of non-text parts a frame.")
 
 
 (defvar multicolumn-frame-top-function
   'multicolumn-frame-top-default-function
-  "A function which is called to find the offset from the top of the display.")
+  "A function that is called to find the offset from the top of the display.")
 
 
-(defvar multicolumn-resize-frame--debug nil)
-
+(defvar multicolumn-frame-full-border-width-function
+  'multicolumn-frame-full-border-width-default-function
+  "A function that is called to find the offset from the top of the display.")
 
 
 ;; -------------------------------------------------------------------
 ;; Resize and position frame.
 ;;
 
-;; It's somehwat of black magic to find out exactly how large an Emacs
+;; It's somewhat of black magic to find out exactly how large an Emacs
 ;; frame is allowed to be on a specific system. The functions below
 ;; are written to include as much information as possible. However, it
 ;; is not unlikely that you would need to override one of the
@@ -285,7 +281,7 @@ hidden. (See `ns-auto-hide-menu-bar'.)")
          ((eq window-system 'x)
           ;; Window title and menu bar.
           ;;
-          ;; Note: This is just an estimate, your milage may wary.
+          ;; Note: This is just an estimate, your mileage may wary.
           22)
          (t
           0))
@@ -303,8 +299,8 @@ hidden. (See `ns-auto-hide-menu-bar'.)")
           (* (frame-parameter (selected-frame) 'menu-bar-lines)
              (frame-char-height))))
    ;; Tool bar.
-   (cond ((or (not (boundp 'tool-bar-mode))
-              (not tool-bar-mode))
+   (cond ((not (and (boundp 'tool-bar-mode)
+                    tool-bar-mode))
           0)
          ((eq window-system 'x)
           ;; For X11, the tool bar is included in the "text" area.
@@ -330,14 +326,23 @@ hidden. (See `ns-auto-hide-menu-bar'.)")
          22)))
 
 
+(defun multicolumn-frame-parameter (frame parameter)
+  "Return FRAME's value for parameter PARAMETER, or 0 if nil or nonexisting."
+  (let ((value (frame-parameter frame parameter)))
+    (if (null value)
+        0
+      value)))
+
+
 (defun multicolumn-window-extra-width ()
   "The width in pixels of the fringes and scroll bar.
 
 Prior to `window-resize-pixelwise' was introduced (i.e. up to and
-inclduing Emacs 24.3), the fringes and scroll bars were padded to
+including Emacs 24.3), the fringes and scroll bars were padded to
 a multiple of the width of a frame character."
-  (let ((extra-width (+ (frame-scroll-bar-width)
-                        (frame-fringe-width))))
+  (let ((extra-width (+ (multicolumn-frame-parameter nil 'scroll-bar-width)
+                        (multicolumn-frame-parameter nil 'left-fringe)
+                        (multicolumn-frame-parameter nil 'right-fringe))))
     (if (boundp 'window-resize-pixelwise)
         extra-width
       ;; Round up to nearest multiple of the frame char width.
@@ -345,6 +350,32 @@ a multiple of the width of a frame character."
          (- (frame-char-width)
             (% extra-width (frame-char-width)))))))
 
+
+;;
+;; Frame parameters (as seen in the wild):
+;;
+;;                         w32  ns    x
+;;
+;; internal-border-width    0    2    1
+;; border-width             2    0    0
+;;
+
+(defun multicolumn-frame-full-border-width-default-function ()
+  "The width of the frame borders, in pixels."
+  (cond ((eq window-system 'w32)
+         ;; The frame border can vary between windows versions, and
+         ;; depending on which mode is used.
+         ;;
+         ;; 4 pixels represent a classic border. Please override
+         ;; `multicolumn-frame-full-border-width-function' if this
+         ;; doesn't match your system.
+         ;;
+         ;; TODO: Investigate if there is away to find the actual
+         ;; border width.
+         4)
+        (t
+         (+ (multicolumn-frame-parameter nil 'border-width)
+            (multicolumn-frame-parameter nil 'internal-border-width)))))
 
 (defun multicolumn-window-pixel-width (width)
   "The width of a window, with WIDTH characters, in pixels."
@@ -354,12 +385,12 @@ a multiple of the width of a frame character."
 
 
 (defun multicolumn-resize-frame--optimal-number-of-windows (width-in-chars)
-  "Return number of side-by-side windows the display can accomodate.
+  "Return number of side-by-side windows the display can accommodate.
 
 WIDTH-IN-CHARS is the width of each window, in characters."
   (max 1
        (/ (- (funcall multicolumn-display-pixel-width-function)
-             (* 2 (frame-border-width)))
+             (* 2 (funcall multicolumn-frame-full-border-width-function)))
           (multicolumn-window-pixel-width width-in-chars))))
 
 (defun multicolumn-resize-frame--read-interactive-arguments ()
@@ -375,14 +406,6 @@ WIDTH-IN-CHARS is the width of each window, in characters."
     '(nil nil)))
 
 
-
-;; Frame parameters (as seen in the wild):
-;;
-;;                         w32  ns    x
-;;
-;; internal-border-width    0    2    1
-;; border-width             2    0    0
-;;
 
 ;;;###autoload
 (defun multicolumn-resize-frame (&optional
@@ -408,7 +431,7 @@ window system."
             (multicolumn-resize-frame--optimal-number-of-windows
              width-in-chars)))
     (let* ((top (funcall multicolumn-frame-top-function))
-           ;; `set-frame-size' expectes the width of the "text area",
+           ;; `set-frame-size' expects the width of the "text area",
            ;; i.e. without one set of fringes and a scroll bar.
            (width (- (* number-of-windows
                         (multicolumn-window-pixel-width width-in-chars))
@@ -423,21 +446,16 @@ window system."
       (when multicolumn-resize-frame-full-lines-only
         ;; Ensure only full lines.
         (setq height (- height (% height (frame-char-height)))))
-      (if (boundp 'window-resize-pixelwise)
-          (set-frame-size (selected-frame)
-                          width
-                          height
-                          'pixelwise)
+      (if (boundp 'frame-resize-pixelwise)
+          (let ((frame-resize-pixelwise t))
+	    (with-no-warnings
+	      (set-frame-size (selected-frame)
+			      width
+			      height
+			      'pixelwise)))
         (set-frame-size (selected-frame)
                         (/ width (frame-char-width))
                         (/ height (frame-char-height))))
-      (when multicolumn-resize-frame--debug
-        ;; Without this, `frame-text-height' will not return the
-        ;; correct value, for X11.
-        (sit-for 0.1)
-        (message (format "height: %d (became %d)" height
-                         (frame-text-height))))
-
       ;; Note, `set-frame-position' can't be used as it is documented
       ;; to handle negative values in a special way. (Even if it
       ;; actually don't, at least for OS X.)
@@ -447,14 +465,11 @@ window system."
        ;; Center horizontally, to ensure that no window will be split
        ;; between two monitors. (Assuming that an even number of
        ;; columns and symmetrical monitors are used.)
-       (- (/ (- (funcall
-                 multicolumn-display-pixel-width-function)
-                (+ width
-                   (multicolumn-window-extra-width)
-                   (* 2 (frame-border-width))))
-             2)
-          (or (frame-parameter nil 'border-width)
-              0)))
+       (/ (- (funcall multicolumn-display-pixel-width-function)
+             (+ width
+                (multicolumn-window-extra-width)
+                (* 2 (funcall multicolumn-frame-full-border-width-function))))
+          2))
       (set-frame-parameter (selected-frame)
                            'top
                            (list '+ top))
@@ -476,7 +491,7 @@ of windows."
 
 
 ;; -------------------------------------------------------------------
-;; Create multi column layout.
+;; Create layout with multiple side-by-side windows
 ;;
 
 ;;;###autoload
@@ -496,22 +511,26 @@ than `multicolumn-min-width'."
         (progn
           (unless number-of-windows
             (setq number-of-windows
-                  (/ (+ (window-width nil 'pixelwise)
+                  (/ (+ (with-no-warnings
+                          (window-width nil 'pixelwise))
                         extra-width)
                      (+ (* multicolumn-min-width
                            (frame-char-width))
                         extra-width))))
-          (let ((width (- (window-width nil 'pixelsize)
+          (let ((width (- (with-no-warnings
+                            (window-width nil 'pixelsize))
                           (* (- number-of-windows 1)
                              extra-width))))
             (while (> number-of-windows 1)
               (let ((window-resize-pixelwise t))
-                (split-window
-                 nil
-                 (+ (/ width number-of-windows) extra-width)
-                 'right
-                 'pixelwise))
-              (setq width (- width (window-width nil 'pixelwise)))
+		(with-no-warnings
+		  (split-window
+		   nil
+		   (+ (/ width number-of-windows) extra-width)
+		   'right
+		   'pixelwise)))
+              (setq width (- width (with-no-warnings
+                                     (window-width nil 'pixelwise))))
               (other-window 1)
               (setq number-of-windows (- number-of-windows 1)))))
       ;; Split characterwise.
@@ -635,7 +654,7 @@ The previous window layout can be restored using
 
 
 ;; -------------------------------------------------------------------
-;; Navigation and manipulation of windows in a multi column layout.
+;; Navigation and manipulation side-by-side windows.
 ;;
 
 ;;;###autoload
@@ -713,9 +732,9 @@ The previous window layout can be restored using
 ;;   from 1 each time.
 ;;
 ;; * Events can be marked as "click" (i.e. single), "double", and
-;;   "tripple" (presumably, to be analogous with mouse click events).
-;;   Unlike other qualifiers, you don't bind, say, `tripple-wheel-up'
-;;   to a function, instead you bind `wheel-up' and check if `tripple'
+;;   "triple" (presumably, to be analogous with mouse click events).
+;;   Unlike other qualifiers, you don't bind, say, `triple-wheel-up'
+;;   to a function, instead you bind `wheel-up' and check if `triple'
 ;;   is present using `event-modifiers'.
 ;;
 
@@ -744,7 +763,7 @@ quarantine when mixed with vertical mouse events."
       (if (memq type '(wheel-left wheel-right wheel-up wheel-down))
           (when multicolumn-trackpad-quarantine-active
             (multicolumn-trackpad-quarantine-start-timer))
-        ;; A non-wheel event occured.
+        ;; A non-wheel event occurred.
         (setq multicolumn-trackpad-last-horizontal-wheel-event nil)))))
 
 
@@ -817,8 +836,8 @@ horizontal and vertical trackpad events are mixed."
 
 ;; Note on key bindings:
 ;;
-;; Even thoug this package is implemented as a minor mode, it should
-;; be seen as a prototype of what Emacs might look like if it provded
+;; Even though this package is implemented as a minor mode, it should
+;; be seen as a prototype of what Emacs might look like if it provided
 ;; similar functions. Hence, the provided key bindings does not follow
 ;; the normal minor mode form.
 
@@ -830,9 +849,8 @@ horizontal and vertical trackpad events are mixed."
 
     ;; Replace `split-window-right'. The idea behind replacing this
     ;; command is that `C-x 3' is etched into the fingers of many
-    ;; people to create a multi column layout, and that once you have
-    ;; a multi column layout, you don't want to split the window
-    ;; again.
+    ;; people to create a multicolumn layout, and that once you have a
+    ;; multicolumn layout, you don't want to split the window again.
     (define-key map (kbd "C-x 3")  'multicolumn-delete-other-windows-and-split)
     ;; The `C-x 4' prefix is used for window-related functions.
     (define-key map (kbd "C-x 4 >") 'multicolumn-extend-right)
@@ -860,7 +878,7 @@ horizontal and vertical trackpad events are mixed."
 
 
 ;; Note that mouse wheel events are generated by the operating
-;; system as a slow-down effect. However, releaseing the qualifier
+;; system as a slow-down effect. However, releasing the qualifier
 ;; keys will make the new event arrive without it. If there is no
 ;; binding for the wheel, an error will be issued. Hence, it's
 ;; better to map all wheel events to `ignore'.
@@ -888,10 +906,9 @@ horizontal and vertical trackpad events are mixed."
 
 
 ;;;###autoload
-(define-minor-mode multicolumn-mode
-  "Global minor mode binds multi column functions to suitable keys."
+(define-minor-mode multicolumn-global-mode
+  "Global minor mode for creating and managing side-by-side windows."
   :global t
-  :init-value t
   :keymap multicolumn-map)
 
 
