@@ -1,7 +1,7 @@
 # multicolumn - Creating and managing multiple side-by-side windows
 
 *Author:* Anders Lindgren<br>
-*Version:* 0.1.0<br>
+*Version:* 0.1.1<br>
 *URL:* [https://github.com/Lindydancer/multicolumn](https://github.com/Lindydancer/multicolumn)<br>
 
 Commands helpful when using multiple side-by-side windows.
@@ -52,7 +52,7 @@ file:
 
 ## Creating side-by-side windows
 
-* <kbd>C-x 4 3</kbd> (`multicolumn-delete-other-windows-and-split`) creates
+* <kbd>C-x 3</kbd> (`multicolumn-delete-other-windows-and-split`) creates
 a number of side-by-side windows. The number of windows it creates
 depends on the width of the frame and on `multicolumn-min-width`.
 With a numerical argument, create this many windows.
@@ -81,6 +81,9 @@ window, respectively.
 * <kbd>C-x 4 p</kbd> (`multicolumn-select-previous-window`) selects the
 previous windows. This package does not provide a function to
 select the next. However, it binds <kbd>C-x 4 n</kbd> to `other-window`.
+* <kbd>C-x 4 DIGIT</kbd> (`multicolumn-select-window-number`) go to window
+  number DIGIT, where 1 is the leftmost.
+* <kbd>C-x 4 :</kbd> (`multicolumn-select-minibuffer`) go to the minibuffer.
 
 ## Window content management
 

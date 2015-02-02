@@ -4,7 +4,7 @@
 
 ;; Author: Anders Lindgren
 ;; Created: 2000-??-??
-;; Version: 0.1.0
+;; Version: 0.1.1
 ;; URL: https://github.com/Lindydancer/multicolumn
 
 ;; This program is free software: you can redistribute it and/or modify
@@ -70,7 +70,7 @@
 
 ;; Creating side-by-side windows:
 ;;
-;; * `C-x 4 3' (`multicolumn-delete-other-windows-and-split') creates
+;; * `C-x 3' (`multicolumn-delete-other-windows-and-split') creates
 ;; a number of side-by-side windows. The number of windows it creates
 ;; depends on the width of the frame and on `multicolumn-min-width'.
 ;; With a numerical argument, create this many windows.
@@ -103,6 +103,11 @@
 ;; * `C-x 4 p' (`multicolumn-select-previous-window') selects the
 ;; previous windows. This package does not provide a function to
 ;; select the next. However, it binds `C-x 4 n' to `other-window'.
+;;
+;; * `C-x 4 DIGIT' (`multicolumn-select-window-number') go to window
+;;   number DIGIT, where 1 is the leftmost.
+;;
+;; * `C-x 4 :' (`multicolumn-select-minibuffer') go to the minibuffer.
 
 ;; Window content management:
 ;;
@@ -227,6 +232,17 @@ hidden. (See `ns-auto-hide-menu-bar'.)")
 (defvar multicolumn-frame-full-border-width-function
   'multicolumn-frame-full-border-width-default-function
   "A function that is called to find the offset from the top of the display.")
+
+
+;; -------------------------------------------------------------------
+;; Utilities.
+;;
+
+
+(defalias 'multicolumn-user-error
+  (if (fboundp 'user-error)
+      'user-error
+    'error))
 
 
 ;; -------------------------------------------------------------------
@@ -709,6 +725,33 @@ The previous window layout can be restored using
   (other-window -1))
 
 
+;;;###autoload
+(defun multicolumn-select-window-number (number)
+  "Select window NUMBER, where 1 is the leftmost.
+
+When called interactively, this is assumed to be bound to a key
+seqeunce ending in a digit."
+  (interactive (list (- last-command-event ?0)))
+  (if (< number 1)
+    (multicolumn-user-error "Illegal window number"))
+  (let ((count 1)
+        (win (frame-first-window)))
+    (while (< count number)
+      (setq win (next-window win))
+      (setq count (+ count 1)))
+    (select-window win)))
+
+
+;;;###autoload
+(defun multicolumn-select-minibuffer ()
+  "Select the minibuffer, if visible."
+  (interactive)
+  (let ((win (active-minibuffer-window)))
+    (if win
+        (select-window win)
+      (multicolumn-user-error "Minibuffer is not active"))))
+
+
 ;; -------------------------------------------------------------------
 ;; Trackpad (horizontal mouse wheel) support.
 ;;
@@ -862,6 +905,17 @@ horizontal and vertical trackpad events are mixed."
     (define-key map (kbd "C-x 4 n") 'other-window)
 
     (define-key map (kbd "C-x 4 u") 'multicolumn-pop-window-configuration)
+
+    (define-key map (kbd "C-x 4 :") 'multicolumn-select-minibuffer)
+
+    (let ((count 1))
+      (while (< count 10)
+	;; Note: In newer Emacs versins, `kbd' and `read-kbd-macro'
+	;; are the same. In older versions, however, `kbd' doesn't
+	;; evaluate its argument.
+        (define-key map (read-kbd-macro (format "C-x 4 %d" count))
+          'multicolumn-select-window-number)
+        (setq count (+ count 1))))
 
     (define-key map (kbd "<C-wheel-left>")
       'multicolumn-trackpad-select-previous-window)
